@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>凉 · 对话</title>
+<style>
+  :root { --bg:#14161a; --panel:#1c1f26; --line:#2a2f38; --fg:#e8eaed; --dim:#9aa0aa; --accent:#e36db0; --user:#243042; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:"Yu Gothic UI","Meiryo","Microsoft YaHei",sans-serif; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 14px 16px 120px; }
+  header { display:flex; align-items:center; justify-content:space-between; padding: 6px 0 12px; border-bottom:1px solid var(--line); }
+  h1 { font-size:17px; margin:0; font-weight:600; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid var(--line); color:var(--dim); margin-left:8px; }
+  .tag.ok { color:#7ee2a8; border-color:#2f5c43; }
+  .tag.bad { color:#ff8a8a; border-color:#6b3232; }
+  .log { display:flex; flex-direction:column; gap:14px; margin-top:16px; }
+  .row { display:flex; }
+  .row.me { justify-content:flex-end; }
+  .col { display:flex; flex-direction:column; gap:7px; max-width:82%; min-width:0; }
+  .me .col { align-items:flex-end; }
+  .bubble { padding:10px 13px; border-radius:14px; line-height:1.6; font-size:15px; white-space:pre-wrap; word-break:break-word; }
+  .me .bubble { background:var(--user); border:1px solid #2c3b52; border-bottom-right-radius:5px; }
+  .bot .bubble { background:var(--panel); border:1px solid var(--line); border-bottom-left-radius:5px; }
+  .bubble.dual { display:flex; flex-direction:column; gap:6px; }
+  .bubble .jp { font-size:15px; line-height:1.6; }
+  .bubble .zh { font-size:13px; line-height:1.5; color:var(--dim); border-top:1px solid var(--line); padding-top:6px; }
+  .meta { display:flex; align-items:center; gap:8px; color:var(--dim); font-size:11px; }
+  /* 自己画的播放条：贴在气泡下方，跟主题一套颜色 */
+  .player { display:flex; align-items:center; gap:9px; padding:4px 10px 4px 5px; width:232px; max-width:100%;
+    background:#1a1d23; border:1px solid var(--line); border-radius:999px; }
+  .player .pbtn { flex:0 0 auto; width:24px; height:24px; padding:0; border:0; border-radius:999px;
+    background:var(--accent); color:#fff; font-size:10px; line-height:1;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .player .pbtn:hover { filter:brightness(1.12); }
+  .player .track { position:relative; flex:1; height:4px; border-radius:999px; background:#2b313b; cursor:pointer; }
+  .player .fill { position:absolute; inset:0 auto 0 0; width:0; border-radius:999px;
+    background:linear-gradient(90deg,var(--accent),#f2a2ce); }
+  .player .ptime { flex:0 0 auto; font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  /* 滚动条跟主题一起走，别让浏览器塞一截白条进来 */
+  * { scrollbar-width:thin; scrollbar-color:#333a45 transparent; }
+  *::-webkit-scrollbar { width:10px; height:10px; }
+  *::-webkit-scrollbar-track { background:transparent; }
+  *::-webkit-scrollbar-thumb { background:#2f3540; border-radius:999px; border:2px solid var(--bg); }
+  *::-webkit-scrollbar-thumb:hover { background:#3d4451; }
+  .composer { position:fixed; left:0; right:0; bottom:0; background:linear-gradient(to top, var(--bg) 70%, transparent); padding:14px 16px 18px; }
+  .composer .inner { max-width:820px; margin:0 auto; display:flex; gap:8px; }
+  textarea { flex:1; min-height:52px; max-height:140px; resize:none; background:var(--panel); color:var(--fg);
+    border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:15px; line-height:1.45; font-family:inherit; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  button { background:linear-gradient(135deg,#e36db0,#c74f95); color:#fff; border:0; border-radius:12px; padding:0 20px; font-size:15px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--dim); padding:6px 12px; font-size:13px; border-radius:9px; }
+  #mic, #micZh { padding:0 10px; font-size:13px; background:var(--panel); color:var(--fg); border:1px solid var(--line); width:54px; border-radius:12px; }
+  #mic:hover, #micZh:hover { border-color:#3d4451; }
+  #mic.rec, #micZh.rec { background:#7a1f2b; border-color:#c2455b; color:#ffd7dd; }
+  .modal { position:fixed; inset:0; background:#0008; display:none; align-items:center; justify-content:center; padding:20px; overflow-y:auto; }
+  .modal.show { display:flex; }
+  .card { background:#191c22; border:1px solid var(--line); border-radius:14px; padding:18px; width:min(560px,100%);
+    max-height:calc(100vh - 40px); overflow-y:auto; overscroll-behavior:contain; }
+  .card h2 { margin:0 0 12px; font-size:15px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:10px 0 4px; }
+  input, select, .card textarea { width:100%; background:var(--panel); color:var(--fg); border:1px solid var(--line);
+    border-radius:9px; padding:9px 11px; font-size:14px; font-family:inherit; }
+  .card textarea { min-height:96px; resize:vertical; }
+  .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px;
+    position:sticky; bottom:-18px; background:#191c22; padding:10px 0 18px; }
+  .hint { font-size:12px; color:var(--dim); margin-top:10px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>凉</h1>
+      <span id="tts" class="tag">TTS…</span>
+      <span id="brain" class="tag">模型…</span>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="ghost" id="openCfg">设置</button>
+      <button class="ghost" id="clear">清空</button>
+    </div>
+  </header>
+  <div class="log" id="log"></div>
+</div>
+
+<div class="composer">
+  <div class="inner">
+    <button id="mic" title="日语：点一下开始说，说完再点一下">🎤日</button>
+    <button id="micZh" title="中文：点一下开始说，说完再点一下">🎤中</button>
+    <textarea id="text" placeholder="打字，Enter 发送（Shift+Enter 换行）。也可以点左边 🎤 直接说，中文日语都行。"></textarea>
+    <button id="send">发送</button>
+  </div>
+</div>
+
+<div class="modal" id="cfgModal">
+  <div class="card">
+    <h2>设置</h2>
+    <label>对话接口地址（OpenAI 兼容）</label>
+    <input id="apiBase" placeholder="https://api.deepseek.com/v1">
+    <label>API Key（只存在这台电脑上）</label>
+    <input id="apiKey" type="password" placeholder="sk-...">
+    <label>模型名</label>
+    <div style="display:flex; gap:8px;">
+      <input id="model" placeholder="deepseek-chat" list="modelList" style="flex:1;">
+      <button class="ghost" id="fetchModels">拉取</button>
+    </div>
+    <datalist id="modelList"></datalist>
+    <div class="hint" id="modelHint" style="display:none;"></div>
+    <label>发声引擎</label>
+    <select id="ttsBackend">
+      <option value="local">本地 GPT-SoVITS（免费）</option>
+      <option value="volc">火山豆包（用复刻音色，按字计费）</option>
+    </select>
+    <label>火山情绪提示（给发声加点戏，越具体越好）</label>
+    <input id="volcContext" placeholder="少しツンとした、でも面倒見のいい口調で">
+    <label>火山音色 ID（S_ / saturn_ 开头，仅火山引擎用）</label>
+    <input id="volcSpeaker" placeholder="S_...">
+    <label>识别模型（改完要重启服务才生效）</label>
+    <select id="asrModel">
+      <option value="large">large-v3-turbo（准，约 1.1 秒/句）</option>
+      <option value="small">small（快，约 0.6 秒/句，日语略差）</option>
+    </select>
+    <label>参考音频（决定音色，wav 路径）</label>
+    <input id="refAudio" placeholder="D:\...\ref_seg_0028.wav">
+    <label>参考文本（必须与音频逐字一致）</label>
+    <textarea id="refText" style="min-height:64px;"></textarea>
+    <label>人设 / 语气（system 提示词）</label>
+    <textarea id="persona"></textarea>
+    <div class="hint">Key 只写进 tools\voicechat\config.json，不经我手，也不会发给别人。留空则不修改已存的 key。</div>
+    <div class="actions">
+      <button class="ghost" id="cancelCfg">取消</button>
+      <button id="saveCfg">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const logEl = $("#log");
+let history = [];
+let cfg = {};
+
+function tag(el, text, cls) { el.textContent = text; el.className = "tag " + (cls || ""); }
+
+async function loadCfg() {
+  const r = await fetch("/api/config");
+  cfg = await r.json();
+  // 发声分两条路：火山走接口（不用 9888），本地才看 9888 有没有起来
+    if ((cfg.tts_backend || "local") === "volc") {
+      tag($("#tts"), "火山发声", "ok");
+    } else {
+      tag($("#tts"), cfg.tts_api ? "本地 TTS 就绪" : "本地 TTS 没起来", cfg.tts_api ? "ok" : "bad");
+    }
+  tag($("#brain"), cfg.api_key ? "模型已配置" : "还没填 key", cfg.api_key ? "ok" : "bad");
+  $("#apiBase").value = cfg.api_base || "";
+  $("#model").value = cfg.model || "";
+  $("#persona").value = cfg.persona || "";
+  $("#refAudio").value = cfg.ref_audio || "";
+  $("#ttsBackend").value = cfg.tts_backend || "local";
+  $("#asrModel").value = cfg.asr_model || "large";
+  $("#volcSpeaker").value = cfg.volc_speaker || "";
+  $("#volcContext").value = cfg.volc_context || "";
+  $("#refText").value = cfg.ref_text || "";
+  $("#apiKey").value = "";
+}
+
+function bubble(who, text, zh) {
+  const row = document.createElement("div");
+  row.className = "row " + (who === "me" ? "me" : "bot");
+  const col = document.createElement("div");
+  col.className = "col";
+  const b = document.createElement("div");
+  b.className = "bubble";
+  if (who === "me" || !zh) {
+    b.textContent = text;
+  } else {
+    // 日文在上、中文在下；中文只作翻译，不发声
+    b.classList.add("dual");
+    const jp = document.createElement("div");
+    jp.className = "jp";
+    jp.textContent = text;
+    const cn = document.createElement("div");
+    cn.className = "zh";
+    cn.textContent = zh;
+    b.appendChild(jp);
+    b.appendChild(cn);
+  }
+  col.appendChild(b);
+  row.appendChild(col);
+  row._col = col;
+  logEl.appendChild(row);
+  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  return row;
+}
+
+// 自己画的播放器：浏览器自带那个 <audio controls> 是白色的，套不进深色主题
+let activeAudio = null;
+
+function makePlayer(url) {
+  const audio = new Audio(url);
+  audio.preload = "auto";
+  audio.load();
+  const wrap = document.createElement("div");
+  wrap.className = "player";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pbtn";
+  btn.textContent = "▶";
+  const track = document.createElement("div");
+  track.className = "track";
+  const fill = document.createElement("div");
+  fill.className = "fill";
+  track.appendChild(fill);
+  const time = document.createElement("span");
+  time.className = "ptime";
+  time.textContent = "0:00";
+  wrap.appendChild(btn);
+  wrap.appendChild(track);
+  wrap.appendChild(time);
+
+  const fmt = (s) => (isFinite(s) && s > 0)
+    ? Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0")
+    : "0:00";
+  const refresh = () => {
+    if (!audio.duration) { time.textContent = "0:00 / --:--"; return; }
+    fill.style.width = (audio.currentTime / audio.duration * 100) + "%";
+    time.textContent = fmt(audio.currentTime) + " / " + fmt(audio.duration);
+  };
+
+  btn.addEventListener("click", () => {
+    if (audio.paused) audio.play().catch(() => {});
+    else audio.pause();
+  });
+  audio.addEventListener("play", () => {
+    if (activeAudio && activeAudio !== audio) activeAudio.pause();
+    activeAudio = audio;
+    btn.textContent = "❚❚";
+  });
+  audio.addEventListener("pause", () => { btn.textContent = "▶"; });
+  audio.addEventListener("ended", () => { btn.textContent = "▶"; audio.currentTime = 0; refresh(); });
+  audio.addEventListener("timeupdate", refresh);
+  audio.addEventListener("loadedmetadata", refresh);
+  track.addEventListener("click", (e) => {
+    if (!audio.duration) return;
+    const r = track.getBoundingClientRect();
+    audio.currentTime = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1) * audio.duration;
+    refresh();
+  });
+
+  wrap._audio = audio;
+  refresh();
+  // 有的情况下元数据来得晚（自动播放被拦时尤其如此），补几次，别一直卡在 --:--
+  const waitDur = setInterval(() => {
+    if (audio.duration) { refresh(); clearInterval(waitDur); }
+  }, 300);
+  setTimeout(() => clearInterval(waitDur), 8000);
+  return wrap;
+}
+
+function attachMeta(row, audioUrl) {
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const t = document.createElement("span");
+  t.textContent = new Date().toLocaleTimeString();
+  if (audioUrl) {
+    const p = makePlayer(audioUrl);
+    meta.appendChild(p);
+    // 新的一句一出来就自动播，被浏览器拦了就等用户点 ▶
+    p._audio.play().catch(() => {});
+    meta.appendChild(t);
+  } else {
+    meta.appendChild(t);
+  }
+  (row._col || row).appendChild(meta);
+}
+
+async function speak(text) {
+  const r = await fetch("/api/say", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text })
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(j.error || ("TTS HTTP " + r.status));
+  }
+  return URL.createObjectURL(await r.blob());
+}
+
+async function converse(text) {
+  const btn = $("#send");
+  btn.disabled = true;
+  try {
+    btn.textContent = "思考中…";
+    const r = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, history })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    const reply = j.reply;
+    history.push({ role: "user", content: text });
+    history.push({ role: "assistant", content: reply });
+    const row = bubble("bot", reply, j.zh || "");
+    btn.textContent = "合成中…";
+    const url = await speak(reply);
+    attachMeta(row, url);
+  } catch (e) {
+    const row = bubble("bot", "[失败] " + e.message);
+    attachMeta(row, null);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "发送";
+  }
+}
+
+async function send() {
+  const input = $("#text");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  bubble("me", text);
+  await converse(text);
+}
+
+// ---- 麦克风：录一段 -> 服务器转文字 -> 走同一条对话链 ----
+let rec = null, chunks = [];
+
+async function toggleMic(btn, lang) {
+
+  if (rec && rec.state === "recording") { rec.stop(); return; }
+  lang = lang || "ja";
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    bubble("bot", "[麦克风打不开] " + e.message);
+    return;
+  }
+  chunks = [];
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+  rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    btn.classList.remove("rec");
+    btn.textContent = lang === "zh" ? "🎤中" : "🎤日";
+    const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+    if (blob.size < 1500) { bubble("bot", "[没录到什么声音]"); return; }
+    const row = bubble("me", "🎤 转写中…");
+    const b = row.querySelector(".bubble");
+    try {
+      const r = await fetch("/api/hear?lang=" + encodeURIComponent(lang), {
+        method: "POST", headers: { "Content-Type": blob.type }, body: blob
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const text = (j.text || "").trim();
+      if (!text) throw new Error("没听清，再说一遍");
+      b.textContent = text;
+      await converse(text);
+    } catch (e) {
+      b.textContent = "[没听清] " + e.message;
+    }
+  };
+  rec.start();
+  btn.textContent = "■";
+  btn.classList.add("rec");
+}
+
+$("#mic").addEventListener("click", () => toggleMic($("#mic"), "ja"));
+$("#micZh").addEventListener("click", () => toggleMic($("#micZh"), "zh"));
+
+$("#send").addEventListener("click", send);
+$("#text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("#clear").addEventListener("click", () => { logEl.innerHTML = ""; history = []; });
+$("#openCfg").addEventListener("click", () => $("#cfgModal").classList.add("show"));
+$("#cancelCfg").addEventListener("click", () => $("#cfgModal").classList.remove("show"));
+$("#saveCfg").addEventListener("click", async () => {
+  const body = {
+    api_base: $("#apiBase").value.trim(),
+    model: $("#model").value.trim(),
+    persona: $("#persona").value.trim(),
+    ref_audio: $("#refAudio").value.trim(),
+    tts_backend: $("#ttsBackend").value,
+    asr_model: $("#asrModel").value,
+    volc_speaker: $("#volcSpeaker").value.trim(),
+    volc_context: $("#volcContext").value.trim(),
+    ref_text: $("#refText").value.trim(),
+  };
+  const k = $("#apiKey").value.trim();
+  if (k) body.api_key = k;
+  await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  $("#cfgModal").classList.remove("show");
+  loadCfg();
+});
+$("#fetchModels").addEventListener("click", async () => {
+  const hint = $("#modelHint");
+  hint.style.display = "block";
+  hint.textContent = "拉取中…（要先把 key 保存一次）";
+  try {
+    const r = await fetch("/api/models");
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    const dl = $("#modelList");
+    dl.innerHTML = "";
+    (j.models || []).forEach((m) => {
+      const o = document.createElement("option");
+      o.value = m;
+      dl.appendChild(o);
+    });
+    hint.textContent = (j.models || []).length
+      ? "可用模型：" + j.models.join("、")
+      : "这个平台没返回模型列表";
+  } catch (e) {
+    hint.textContent = "拉不到：" + e.message;
+  }
+});
+
+loadCfg();
+setInterval(loadCfg, 15000);
+</script>
+</body>
+</html>

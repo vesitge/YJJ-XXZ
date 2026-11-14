@@ -1,0 +1,29 @@
+﻿# 模型与运行环境不入库
+*.safetensors
+*.ckpt
+*.pth
+*.pt
+*.whl
+*.zip
+*.7z
+*.tar.gz
+*.wav
+*.flac
+*.mp3
+*.mp4
+
+# Python
+__pycache__/
+*.pyc
+venv*/
+.venv*/
+hf_cache/
+
+# ComfyUI 本体与输出
+ComfyUI_windows_portable*/
+output/
+temp/
+
+# 系统
+Thumbs.db
+desktop.ini
